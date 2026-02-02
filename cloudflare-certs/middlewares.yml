@@ -1,0 +1,37 @@
+http:
+  middlewares:
+    # Global rate limiting - 100 requests per minute per IP
+    global-ratelimit:
+      rateLimit:
+        average: 100
+        period: "1m"
+        burst: 50
+    
+    # Strict rate limiting for admin endpoints - 20 requests per minute
+    admin-ratelimit:
+      rateLimit:
+        average: 20
+        period: "1m"
+        burst: 10
+    
+    # Dynamic IP whitelist (managed by root-manager)
+    dynamic-ipwhitelist:
+      ipAllowList:
+        sourceRange:
+          - "127.0.0.1/32"
+          - "77.106.153.146/32"
+    
+    # Security headers
+    traefik-security:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        customFrameOptionsValue: "SAMEORIGIN"
+        contentTypeNosniff: true
+        browserXssFilter: true
+    
+    # Basic auth middleware (uses Docker secret)
+    traefik-auth:
+      basicAuth:
+        usersFile: "/run/secrets/traefik_dashboard_auth"

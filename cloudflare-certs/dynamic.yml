@@ -1,0 +1,12 @@
+# Traefik Dynamic Configuration for Cloudflare Origin Certificates
+# This file tells Traefik where to find the SSL certificates
+
+tls:
+  certificates:
+    - certFile: /certs/origin-fullchain.pem
+      keyFile: /certs/origin-key.pem
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /certs/origin-fullchain.pem
+        keyFile: /certs/origin-key.pem

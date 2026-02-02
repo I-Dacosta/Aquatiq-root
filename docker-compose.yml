@@ -1,0 +1,584 @@
+# Aquatiq Root Infrastructure Container
+# Complete infrastructure with all core services - Hardened Configuration
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+  redis_password:
+    file: ./secrets/redis_password.txt
+  n8n_encryption_key:
+    file: ./secrets/n8n_encryption_key.txt
+  traefik_dashboard_auth:
+    file: ./secrets/traefik_dashboard_auth.txt
+  nats_auth_token:
+    file: ./secrets/nats_auth_token.txt
+  pgadmin_email:
+    file: ./secrets/pgadmin_email.txt
+  pgadmin_password:
+    file: ./secrets/pgadmin_password.txt
+  grafana_password:
+    file: ./secrets/grafana_password.txt
+
+services:
+  # Docker Socket Proxy - Secure Docker API access
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: aquatiq-docker-proxy
+    restart: always
+    environment:
+      # Only allow read operations for containers
+      - CONTAINERS=1
+      - POST=0
+      - BUILD=0
+      - COMMIT=0
+      - CONFIGS=0
+      - DISTRIBUTION=0
+      - EXEC=0
+      - IMAGES=1
+      - INFO=1
+      - NETWORKS=1
+      - NODES=0
+      - PLUGINS=0
+      - SERVICES=0
+      - SESSION=0
+      - SWARM=0
+      - SYSTEM=1
+      - TASKS=0
+      - VOLUMES=1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 32M
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:2375/version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Reverse Proxy & SSL Management
+  traefik:
+    image: traefik:v3.6.1
+    container_name: aquatiq-traefik
+    restart: always
+    depends_on:
+      - docker-socket-proxy
+    command:
+      - "--api.dashboard=true"
+      - "--ping=true"
+      - "--ping.entryPoint=traefik"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.endpoint=tcp://docker-socket-proxy:2375"
+      - "--providers.file.directory=/certs"
+      - "--providers.file.watch=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # Cloudflare Integration - Trust Cloudflare IPs for real client IP
+      - "--entrypoints.web.forwardedHeaders.trustedIPs=173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22"
+      - "--entrypoints.websecure.forwardedHeaders.trustedIPs=173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22"
+      - "--log.level=INFO"
+      - "--log.format=json"
+      - "--accesslog=true"
+      - "--accesslog.format=json"
+      - "--accesslog.filepath=/var/log/traefik/access.log"
+      - "--accesslog.bufferingsize=100"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - traefik_data:/letsencrypt
+      - traefik_logs:/var/log/traefik
+      - aquatiq_gateway_data:/data
+      - ./cloudflare-certs:/certs:ro
+    networks:
+      - internal
+    secrets:
+      - traefik_dashboard_auth
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "traefik.enable=true"
+      
+      # Dashboard router with IP whitelist + rate limiting + auth
+      # Middlewares are defined in /certs/middlewares.yml (file provider)
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.aquatiq.com`)"
+      - "traefik.http.routers.traefik-dashboard.entrypoints=websecure"
+      - "traefik.http.routers.traefik-dashboard.tls=true"
+      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+      - "traefik.http.routers.traefik-dashboard.middlewares=dynamic-ipwhitelist@file,admin-ratelimit@file,traefik-auth@file,traefik-security@file"
+
+  # Landing Page
+  app:
+    image: nginx:1.27-alpine
+    container_name: aquatiq-app
+    restart: always
+    volumes:
+      - ./app:/usr/share/nginx/html:ro
+    networks:
+      - internal
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 32M
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.app.rule=Host(`app.aquatiq.com`)"
+      - "traefik.http.routers.app.entrypoints=websecure"
+      - "traefik.http.routers.app.tls=true"
+      - "traefik.http.services.app.loadbalancer.server.port=80"
+
+  # Aquatiq Gateway - Go-based Infrastructure Management Layer
+  aquatiq-gateway:
+    build: ./aquatiq-gateway
+    container_name: aquatiq-gateway
+    restart: unless-stopped
+    ports:
+      - "7500:7500"   # REST API
+      - "50051:50051" # gRPC API (mTLS)
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      docker-socket-proxy:
+        condition: service_started
+    environment:
+      # Server configuration
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=7500
+      - SERVER_GRPCPORT=50051
+      - SERVER_APIKEY=${INTEGRATION_GATEWAY_API_KEY}
+      
+      # gRPC configuration
+      - GRPC_HOST=0.0.0.0
+      - GRPC_PORT=50051
+      - GRPC_TLS_ENABLED=false
+      
+      # Docker configuration
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
+      - DOCKER_VERSION=1.41
+      
+      # Database configuration
+      - DATABASE_POSTGRESURL=postgres://aquatiq:${POSTGRES_PASSWORD}@postgres:5432/aquatiq?sslmode=disable
+      
+      # Redis configuration
+      - REDIS_ENABLED=true
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_TLS_ENABLED=false
+      
+      # Query Cache configuration
+      - CACHE_QUERY_ENABLED=true
+      - CACHE_QUERY_TTL=5m
+      - CACHE_QUERY_PREFIX=query
+      
+      # Whitelist configuration
+      - WHITELIST_TRAEFIKCONFIGPATH=/data/traefik-dynamic.yml
+      
+      - DOMAIN=${DOMAIN:-localhost}
+      
+      # Logging
+      - LOGGING_LEVEL=info
+      - LOGGING_FORMAT=json
+    volumes:
+      - aquatiq_gateway_data:/data
+      - ./backups:/backups
+    networks:
+      - internal
+      - aquatiq-backend
+    secrets:
+      - postgres_password
+      - redis_password
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:7500/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    labels:
+      - "traefik.enable=true"
+      # REST API endpoint
+      - "traefik.http.routers.aquatiq-gateway.rule=Host(`admin.${DOMAIN}`)"
+      - "traefik.http.routers.aquatiq-gateway.entrypoints=websecure"
+      - "traefik.http.routers.aquatiq-gateway.tls=true"
+      - "traefik.http.services.aquatiq-gateway.loadbalancer.server.port=7500"
+      - "traefik.http.routers.aquatiq-gateway.middlewares=dynamic-ipwhitelist@file,admin-ratelimit@file"
+  
+  # pgAdmin - PostgreSQL Management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: aquatiq-pgadmin
+    restart: unless-stopped
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@aquatiq.com
+      - PGADMIN_DEFAULT_PASSWORD=admin123
+      - PGADMIN_DISABLE_POSTFIX=true
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - internal
+      - aquatiq-backend
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M  # Increased from 512M (was at 51% usage)
+        reservations:
+          cpus: '0.1'
+          memory: 256M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.pgadmin.rule=Host(`pgadmin.${DOMAIN}`)"
+      - "traefik.http.routers.pgadmin.entrypoints=websecure"
+      - "traefik.http.routers.pgadmin.tls=true"
+      - "traefik.http.services.pgadmin.loadbalancer.server.port=80"
+  
+  # RedisInsight - Redis Management (ARM64 compatible)
+  redis-insight:
+    image: redis/redisinsight:latest
+    container_name: aquatiq-redis-insight
+    restart: unless-stopped
+    volumes:
+      - redis_insight_data:/data
+    networks:
+      - internal
+      - aquatiq-backend
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.redis-insight.rule=Host(`redis.${DOMAIN}`)"
+      - "traefik.http.routers.redis-insight.entrypoints=websecure"
+      - "traefik.http.routers.redis-insight.tls=true"
+      - "traefik.http.services.redis-insight.loadbalancer.server.port=5540"
+  
+  # Prometheus - Metrics Collection
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: aquatiq-prometheus
+    restart: unless-stopped
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - internal
+      - aquatiq-backend
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`prometheus.${DOMAIN}`)"
+      - "traefik.http.routers.prometheus.entrypoints=websecure"
+      - "traefik.http.routers.prometheus.tls=true"
+      - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
+  
+  # Grafana - Monitoring Dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: aquatiq-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD__FILE=/run/secrets/grafana_password
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=https://grafana.${DOMAIN}
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - internal
+      - aquatiq-backend
+    secrets:
+      - grafana_password
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 768M  # Increased from 512M (was at 54% usage)
+        reservations:
+          cpus: '0.2'
+          memory: 256M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.aquatiq.com`)"
+      - "traefik.http.routers.grafana.entrypoints=websecure"
+      - "traefik.http.routers.grafana.tls=true"
+      - "traefik.http.services.grafana.loadbalancer.server.port=3000"
+
+  # NTP Time Server (Public)
+  ntp-server:
+    image: cturra/ntp:latest
+    container_name: aquatiq-ntp
+    restart: always
+    environment:
+      - NTP_SERVERS=0.no.pool.ntp.org,1.no.pool.ntp.org
+    ports:
+      - "123:123/udp"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 64M
+        reservations:
+          cpus: '0.1'
+          memory: 16M
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:17-alpine
+    container_name: aquatiq-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: aquatiq
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_MULTIPLE_DATABASES: n8n,aquatiq_risk
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-multi-db.sh:/docker-entrypoint-initdb.d/init-multi-db.sh:ro
+    networks:
+      - aquatiq-backend
+    secrets:
+      - postgres_password
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aquatiq"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    container_name: aquatiq-redis
+    restart: unless-stopped
+    command: sh -c 'redis-server --appendonly yes --requirepass "$$(cat /run/secrets/redis_password)"'
+    volumes:
+      - redis_data:/data
+    networks:
+      - aquatiq-backend
+    secrets:
+      - redis_password
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "sh", "-c", "redis-cli -a $$(cat /run/secrets/redis_password) ping | grep PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  # NATS Message Queue
+  nats:
+    image: nats:2.10-alpine
+    container_name: aquatiq-nats
+    restart: always
+    command: 
+      - "-c"
+      - "/etc/nats/nats.conf"
+    environment:
+      - NATS_AUTH_TOKEN=${NATS_AUTH_TOKEN}
+    volumes:
+      - nats_data:/data
+      - ./nats.conf:/etc/nats/nats.conf:ro
+    networks:
+      - aquatiq-backend
+    secrets:
+      - nats_auth_token
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8222/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  # n8n Workflow Automation
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: aquatiq-n8n
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    environment:
+      # n8n configuration
+      - N8N_HOST=n8n.aquatiq.com
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - N8N_SECURE_COOKIE=true
+      - WEBHOOK_URL=https://n8n.aquatiq.com/
+      - N8N_TRUSTED_PROXIES=loopback,linklocal,uniquelocal,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16
+      - NODE_ENV=production
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-Europe/Oslo}
+      - N8N_ENCRYPTION_KEY_FILE=/run/secrets/n8n_encryption_key
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      
+      # Database configuration
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=n8n
+      - DB_POSTGRESDB_USER=aquatiq
+      - DB_POSTGRESDB_PASSWORD_FILE=/run/secrets/postgres_password
+      
+      # Redis configuration
+      - QUEUE_BULL_REDIS_HOST=redis
+      - QUEUE_BULL_REDIS_PORT=6379
+      - QUEUE_BULL_REDIS_PASSWORD_FILE=/run/secrets/redis_password
+      
+      # Execution settings
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=336
+      
+      # Integration endpoints
+      - RISK_AGENT_URL=${RISK_AGENT_URL:-http://31.97.38.31:8000/scan}
+      - RISK_AGENT_API_KEY=${RISK_AGENT_API_KEY:-}
+      - NATS_AUTH_TOKEN_FILE=/run/secrets/nats_auth_token
+      
+      # Notification settings
+      - TEAMS_TEAM_ID=${TEAMS_TEAM_ID:-}
+      - TEAMS_CHANNEL_ID=${TEAMS_CHANNEL_ID:-}
+      - ALERT_EMAIL_TO=${ALERT_EMAIL_TO:-soc@aquatiq.com}
+      - ALERT_EMAIL_FROM=${ALERT_EMAIL_FROM:-risk-agent@aquatiq.com}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./workflows:/workflows:ro
+    networks:
+      - internal
+      - aquatiq-backend
+    secrets:
+      - postgres_password
+      - redis_password
+      - n8n_encryption_key
+      - nats_auth_token
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.n8n.rule=Host(`n8n.aquatiq.com`)"
+      - "traefik.http.routers.n8n.entrypoints=websecure"
+      - "traefik.http.routers.n8n.tls=true"
+      - "traefik.http.services.n8n.loadbalancer.server.port=5678"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5678/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  traefik_data:
+    driver: local
+  traefik_logs:
+    driver: local
+  aquatiq_gateway_data:
+    driver: local
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  nats_data:
+    driver: local
+  n8n_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+  redis_insight_data:
+    driver: local
+
+networks:
+  internal:
+    name: internal
+    driver: bridge
+  aquatiq-backend:
+    name: aquatiq-backend
+    driver: bridge
+    internal: true
