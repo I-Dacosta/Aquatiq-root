@@ -13,7 +13,7 @@ The webhook service is now running on your VPS and ready to receive GitHub push 
 
 ## 🔧 Configure GitHub Webhook
 
-To enable automatic deployment when you push to the `root` branch:
+To enable automatic deployment when you push to the `main` branch:
 
 ### Step 1: Go to GitHub Repository Settings
 1. Navigate to: https://github.com/I-Dacosta/Aquatiq/settings/hooks
@@ -48,7 +48,7 @@ Click **"Add webhook"** button to create the webhook.
 
 ## 📋 How It Works
 
-When you push changes to the `root` branch:
+When you push changes to the `main` branch (production deployments):
 
 1. **GitHub sends webhook event** → VPS receives it on port 9000
 2. **Webhook verifies signature** → Ensures it's really from GitHub
@@ -63,13 +63,17 @@ When you push changes to the `root` branch:
 # On your local machine
 cd /Volumes/Lagring/Aquatiq/aquatiq-root-container
 
-# Make changes
+# For development work (use dev branch)
+git checkout dev
 vim docker-compose.yml
-
-# Commit and push
 git add docker-compose.yml
 git commit -m "Update service configuration"
-git push origin root
+git push origin dev
+
+# When ready for production, merge dev to main
+git checkout main
+git merge dev
+git push origin main
 
 # 🎉 VPS automatically deploys the changes!
 ```
@@ -103,7 +107,7 @@ ssh root@31.97.38.31 "sudo systemctl status aquatiq-webhook"
 
 ### Webhook Not Triggering?
 1. Check webhook is active in GitHub settings
-2. Verify you're pushing to `root` branch (not `master` or other branches)
+2. Verify you're pushing to `main` branch (not `dev` or other branches)
 3. Check VPS can be reached: `curl http://31.97.38.31:9000`
 
 ### Deployment Fails?
@@ -142,4 +146,5 @@ Then update the secret in GitHub webhook settings.
 
 **Status:** ✅ Ready to deploy  
 **Last Updated:** February 2, 2026  
-**Branch:** `root`
+**Deployment Branch:** `main` (production)  
+**Development Branch:** `dev`

@@ -8,7 +8,7 @@ set -e
 
 REPO_DIR="/opt/aquatiq"
 LOG_FILE="/var/log/aquatiq-webhook.log"
-BRANCH="root"
+BRANCH="main"
 WEBHOOK_SECRET="${GITHUB_WEBHOOK_SECRET:-}"
 PORT="${WEBHOOK_PORT:-9000}"
 
