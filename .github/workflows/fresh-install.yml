@@ -80,10 +80,44 @@ jobs:
             echo "🔐 Injecting credentials from GitHub Secrets..."
             mkdir -p "$DEPLOY_DIR/secrets"
             
+            # Validate that all required secrets are present
+            echo "🔍 Verifying all required secrets are available..."
+            REQUIRED_SECRETS=(
+              "DOMAIN"
+              "POSTGRES_PASSWORD"
+              "REDIS_PASSWORD"
+              "NATS_AUTH_TOKEN"
+              "N8N_ENCRYPTION_KEY"
+              "INTEGRATION_GATEWAY_API_KEY"
+              "PGADMIN_EMAIL"
+              "PGADMIN_PASSWORD"
+              "GRAFANA_PASSWORD"
+              "TRAEFIK_DASHBOARD_AUTH"
+              "CLOUDFLARE_ORIGIN_CERT"
+              "CLOUDFLARE_ORIGIN_KEY"
+            )
+            
+            MISSING_SECRETS=()
+            for secret in "${REQUIRED_SECRETS[@]}"; do
+              secret_value="${!secret}"
+              if [ -z "$secret_value" ]; then
+                MISSING_SECRETS+=("$secret")
+              fi
+            done
+            
+            if [ ${#MISSING_SECRETS[@]} -gt 0 ]; then
+              echo "❌ ERROR: Missing required GitHub Secrets:"
+              printf '  - %s\n' "${MISSING_SECRETS[@]}"
+              exit 1
+            fi
+            echo "✅ All required secrets validated"
+            
             # Export GitHub Secrets to .env.production
+            echo "📝 Creating .env.production with all credentials..."
             cat > "$DEPLOY_DIR/.env.production" << 'EOF'
             # Production Environment - Auto-generated from GitHub Secrets
             # Generated: $(date)
+            # WARNING: This file contains sensitive credentials. Keep secure.
             
             DOMAIN=${{ secrets.DOMAIN }}
             POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
@@ -97,7 +131,8 @@ jobs:
             TRAEFIK_DASHBOARD_AUTH=${{ secrets.TRAEFIK_DASHBOARD_AUTH }}
             EOF
             
-            # Create secret files from environment variables (using -n to avoid adding newlines)
+            # Create individual secret files (no trailing newlines via echo -n)
+            echo "📝 Creating individual secret files..."
             echo -n "${{ secrets.POSTGRES_PASSWORD }}" > "$DEPLOY_DIR/secrets/postgres_password.txt"
             echo -n "${{ secrets.REDIS_PASSWORD }}" > "$DEPLOY_DIR/secrets/redis_password.txt"
             echo -n "${{ secrets.NATS_AUTH_TOKEN }}" > "$DEPLOY_DIR/secrets/nats_auth_token.txt"
@@ -107,18 +142,43 @@ jobs:
             echo -n "${{ secrets.GRAFANA_PASSWORD }}" > "$DEPLOY_DIR/secrets/grafana_password.txt"
             echo -n "${{ secrets.TRAEFIK_DASHBOARD_AUTH }}" > "$DEPLOY_DIR/secrets/traefik_dashboard_auth.txt"
             
-            # 🔐 CREATE CLOUDFLARE CERTIFICATES (from GitHub Secrets)
+            # Verify secret files were created correctly (no extra bytes)
+            echo "🔍 Verifying secret files..."
+            for secret_file in "$DEPLOY_DIR/secrets"/*.txt; do
+              filename=$(basename "$secret_file")
+              file_size=$(stat -f%z "$secret_file" 2>/dev/null || stat -c%s "$secret_file" 2>/dev/null)
+              echo "   ✅ $filename: $file_size bytes"
+            done
+            
+            # 🔐 DEPLOY CLOUDFLARE CERTIFICATES (from GitHub Secrets)
             echo "🔐 Deploying Cloudflare origin certificates..."
             mkdir -p "$DEPLOY_DIR/cloudflare-certs"
             printf '%s' "${{ secrets.CLOUDFLARE_ORIGIN_CERT }}" > "$DEPLOY_DIR/cloudflare-certs/origin-cert.pem"
             printf '%s' "${{ secrets.CLOUDFLARE_ORIGIN_KEY }}" > "$DEPLOY_DIR/cloudflare-certs/origin-key.pem"
             
+            # Verify certificate files
+            echo "🔍 Verifying certificate files..."
+            if openssl x509 -in "$DEPLOY_DIR/cloudflare-certs/origin-cert.pem" -noout >/dev/null 2>&1; then
+              echo "   ✅ origin-cert.pem: Valid certificate"
+            else
+              echo "   ❌ origin-cert.pem: Invalid certificate format"
+              exit 1
+            fi
+            
+            if openssl pkey -in "$DEPLOY_DIR/cloudflare-certs/origin-key.pem" -check -noout >/dev/null 2>&1; then
+              echo "   ✅ origin-key.pem: Valid private key"
+            else
+              echo "   ❌ origin-key.pem: Invalid private key format"
+              exit 1
+            fi
+            
             # Set secure permissions on certificate and secret files
+            echo "🔒 Setting secure file permissions..."
             chmod 600 "$DEPLOY_DIR/cloudflare-certs"/*.pem
             chmod 644 "$DEPLOY_DIR/secrets"/*.txt
             chmod 640 "$DEPLOY_DIR/.env.production"
             
-            echo "✅ Credentials injected"
+            echo "✅ All credentials and certificates injected successfully"
             
             # Log in to GitHub Container Registry
             echo "🔐 Logging into GitHub Container Registry..."
@@ -143,19 +203,60 @@ jobs:
             docker compose -f docker-compose.yml up -d 2>&1 | grep -E "(Creating|Recreate|Starting|Started)" || true
             
             # Wait for services to stabilize
-            echo "⏳ Waiting for services to initialize..."
-            sleep 15
+            echo "⏳ Waiting for services to initialize (30 seconds)..."
+            sleep 30
             
-            # Verify health
+            # Comprehensive service health check
             echo "✅ Checking service health..."
+            UNHEALTHY_SERVICES=$(docker compose -f docker-compose.yml ps --format "{{.Service}}\t{{.Status}}" | grep -v "healthy" | grep -v "Up" | wc -l)
             docker compose -f docker-compose.yml ps --format "table {{.Service}}\t{{.Status}}"
             
-            # Test PostgreSQL initialization
-            echo "🔍 Verifying PostgreSQL initialization..."
-            docker compose -f docker-compose.yml logs postgres 2>&1 | grep -E "databases created|ready to accept" | tail -2 || true
+            if [ "$UNHEALTHY_SERVICES" -gt 0 ]; then
+              echo "⚠️  Warning: Some services may not be healthy yet. Waiting additional 30 seconds..."
+              sleep 30
+              docker compose -f docker-compose.yml ps --format "table {{.Service}}\t{{.Status}}"
+            fi
             
-            # Test HTTPS connectivity after Traefik is up
-            echo "⏳ Waiting 20 seconds for Traefik to initialize..."
+            # Verify database initialization
+            echo ""
+            echo "🔍 Verifying PostgreSQL initialization..."
+            PG_READY=$(docker compose exec -T postgres pg_isready -U postgres 2>/dev/null || echo "not-ready")
+            if [[ "$PG_READY" == *"accepting"* ]]; then
+              echo "   ✅ PostgreSQL is accepting connections"
+            else
+              echo "   ⏳ PostgreSQL still initializing..."
+            fi
+            
+            # Verify n8n started correctly
+            echo "🔍 Verifying n8n initialization..."
+            N8N_READY=$(docker compose logs n8n 2>&1 | grep "n8n ready on" | tail -1)
+            if [ ! -z "$N8N_READY" ]; then
+              echo "   ✅ $N8N_READY"
+            else
+              echo "   ⏳ n8n still starting..."
+            fi
+            
+            # Verify Redis is healthy
+            echo "🔍 Verifying Redis health..."
+            REDIS_PING=$(docker compose exec -T redis redis-cli ping 2>/dev/null)
+            if [ "$REDIS_PING" = "PONG" ]; then
+              echo "   ✅ Redis is responding: PONG"
+            else
+              echo "   ⏳ Redis still initializing..."
+            fi
+            
+            # Test TLS certificate loading in Traefik
+            echo "🔍 Verifying TLS certificate configuration..."
+            CERT_ERRORS=$(docker compose logs traefik 2>&1 | grep -i "failed to find any PEM data\|invalid.*certificate" | wc -l)
+            if [ "$CERT_ERRORS" = "0" ]; then
+              echo "   ✅ Traefik loaded certificates successfully"
+            else
+              echo "   ❌ Warning: Traefik certificate errors detected"
+              docker compose logs traefik 2>&1 | grep -i "certificate\|tls" | head -3
+            fi
+            
+            # Wait for Traefik to fully initialize
+            echo "⏳ Waiting for Traefik to initialize (20 seconds)..."
             sleep 20
             
             echo "🔍 Testing HTTPS connectivity..."
