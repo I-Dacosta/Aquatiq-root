@@ -1,12 +1,74 @@
 # Traefik Dynamic Configuration for Cloudflare Origin Certificates
-# This file tells Traefik where to find the SSL certificates
+# Cloudflare Strict Mode SSL - Uses Origin Certificate for end-to-end encryption
+# Certificate: Valid for *.aquatiq.com and aquatiq.com
+# Expiration: November 17, 2040
 
 tls:
+  # TLS Certificate Configuration
   certificates:
-    - certFile: /certs/origin-fullchain.pem
+    - certFile: /certs/origin-cert.pem
       keyFile: /certs/origin-key.pem
+      stores:
+        - default
+  
+  # Default certificate store for all HTTPS connections
   stores:
     default:
       defaultCertificate:
-        certFile: /certs/origin-fullchain.pem
+        certFile: /certs/origin-cert.pem
         keyFile: /certs/origin-key.pem
+  
+  # TLS Options for Cloudflare Strict Mode
+  options:
+    default:
+      minVersion: VersionTLS12
+      cipherSuites:
+        - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+      curvePreferences:
+        - CurveP384
+        - CurveP256
+
+# HTTP Routes Configuration
+http:
+  # Redirect all HTTP to HTTPS (Cloudflare handles HTTPS → Origin)
+  middlewares:
+    # Security Headers for Cloudflare
+    cloudflare-security:
+      headers:
+        # HSTS: Enable strict transport security
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        # Frame options to prevent clickjacking
+        customFrameOptionsValue: "SAMEORIGIN"
+        # Content Security Policy
+        customRequestHeaders:
+          X-Content-Type-Options: nosniff
+          X-Frame-Options: SAMEORIGIN
+          X-XSS-Protection: "1; mode=block"
+        
+    # Cloudflare real client IP detection
+    cloudflare-ip:
+      headers:
+        customRequestHeaders:
+          # Cloudflare adds these headers - we pass them through
+          X-Forwarded-For: "{{ .Request.RemoteAddr }}"
+  
+  routers:
+    # Redirect HTTP to HTTPS
+    http-catchall:
+      rule: "PathPrefix(`/`)"
+      entryPoints:
+        - web
+      middlewares:
+        - redirect-https
+      service: noop
+    
+  middlewares:
+    redirect-https:
+      redirectScheme:
+        scheme: https
+        permanent: true

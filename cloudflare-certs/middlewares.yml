@@ -1,5 +1,29 @@
 http:
   middlewares:
+    # ============================================================================
+    # CLOUDFLARE SECURITY & HEADERS
+    # ============================================================================
+    
+    # Trust Cloudflare headers (real IP, etc)
+    cloudflare-headers:
+      headers:
+        customRequestHeaders:
+          # Pass through Cloudflare client IP headers
+          X-Forwarded-For: "{{ .Request.Header.Get \"CF-Connecting-IP\" }}"
+          X-Forwarded-Proto: "https"
+          X-Forwarded-Host: "{{ .Request.Header.Get \"Host\" }}"
+        customResponseHeaders:
+          # Cloudflare Strict Mode Headers
+          Strict-Transport-Security: "max-age=31536000; includeSubDomains; preload"
+          X-Content-Type-Options: "nosniff"
+          X-Frame-Options: "SAMEORIGIN"
+          X-XSS-Protection: "1; mode=block"
+          Referrer-Policy: "strict-origin-when-cross-origin"
+    
+    # ============================================================================
+    # RATE LIMITING
+    # ============================================================================
+    
     # Global rate limiting - 100 requests per minute per IP
     global-ratelimit:
       rateLimit:
@@ -14,20 +38,60 @@ http:
         period: "1m"
         burst: 10
     
+    # API rate limiting - 200 requests per minute
+    api-ratelimit:
+      rateLimit:
+        average: 200
+        period: "1m"
+        burst: 100
+    
+    # ============================================================================
+    # IP WHITELISTING
+    # ============================================================================
+    
     # Dynamic IP whitelist (managed by root-manager)
+    # Cloudflare IPs + office networks
     dynamic-ipwhitelist:
       ipAllowList:
         sourceRange:
-          - "127.0.0.1/32"
-          - "77.106.153.146/32"
+          - "127.0.0.1/32"                    # Localhost
+          - "77.106.153.146/32"               # Office network
+          # Note: Cloudflare IPs are trusted via forwardedHeaders in Traefik static config
     
-    # Security headers
-    traefik-security:
+    # ============================================================================
+    # COMPRESSION & CACHING
+    # ============================================================================
+    
+    # Enable gzip compression for responses
+    compress:
+      compress:
+        minResponseBodyBytes: 1024
+        excludedContentTypes:
+          - "image/png"
+          - "image/jpeg"
+          - "image/webp"
+          - "video/*"
+    
+    # ============================================================================
+    # SECURITY HEADERS (for Cloudflare Strict Mode)
+    # ============================================================================
+    
+    security-strict:
       headers:
+        # HSTS for strict HTTPS enforcement
         stsSeconds: 31536000
         stsIncludeSubdomains: true
         stsPreload: true
+        # Prevent MIME type sniffing
+        contentTypeNosniff: true
+        # Prevent clickjacking
         customFrameOptionsValue: "SAMEORIGIN"
+        # Enable XSS protection
+        browserXssFilter: true
+        # No referrer policy
+        referrerPolicy: "strict-origin-when-cross-origin"
+        # Allow HTTPS only
+        forceSTSHeader: true
         contentTypeNosniff: true
         browserXssFilter: true
     
