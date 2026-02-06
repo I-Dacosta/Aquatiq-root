@@ -484,8 +484,7 @@ services:
       - N8N_TRUSTED_PROXIES=loopback,linklocal,uniquelocal,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16
       - NODE_ENV=production
       - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-Europe/Oslo}
-      - N8N_ENCRYPTION_KEY_FILE=/run/secrets/n8n_encryption_key
-      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true
+      - N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=false
       
       # Database configuration
       - DB_TYPE=postgresdb
@@ -523,7 +522,6 @@ services:
     secrets:
       - postgres_password
       - redis_password
-      - n8n_encryption_key
       - nats_auth_token
     deploy:
       resources:
