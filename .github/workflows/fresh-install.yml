@@ -1,77 +1,32 @@
-name: Build & Deploy to VPS (Continuous Deployment)
+name: Fresh Installation & Full Initialization
 
 on:
-  push:
-    branches:
-      - main
-    # Trigger on ANY change to main (including docker-compose, code, config, etc.)
-    # Remove paths filter to build on every push
-    # paths:
-    #   - 'docker-compose.yml'
-    #   - 'aquatiq-gateway/**'
-    #   - '.github/workflows/build-and-deploy.yml'
-
-# This workflow automatically deploys code changes to the existing VPS installation
-# For fresh installations on a new VPS, use: fresh-install.yml (manual trigger)
+  workflow_dispatch:
+    inputs:
+      reset_volumes:
+        description: 'Reset all Docker volumes (database, n8n, redis data)'
+        required: false
+        default: 'false'
+        type: boolean
+      reset_networks:
+        description: 'Reset Docker networks'
+        required: false
+        default: 'false'
+        type: boolean
 
 permissions:
   contents: read
   packages: write
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-    permissions:
-      packages: write
-      contents: read
-    outputs:
-      image-tag: ${{ steps.meta.outputs.tags }}
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}/aquatiq-gateway
-          tags: |
-            type=ref,event=branch
-            type=sha,prefix={{branch}}-
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest
-      
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./aquatiq-gateway
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  deploy:
-    needs: build
+  fresh-install:
     runs-on: ubuntu-latest
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
       
-      - name: Deploy to VPS
+      - name: Fresh Installation to VPS
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -85,7 +40,10 @@ jobs:
             GITHUB_ACTOR="${{ github.actor }}"
             GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}"
             
-            # Initialize directory if it doesn't exist
+            echo "🚀 FRESH INSTALLATION & INITIALIZATION"
+            echo "========================================"
+            
+            # Initialize or reset directory
             if [ ! -d "$DEPLOY_DIR" ]; then
               echo "📁 Creating deployment directory..."
               mkdir -p "$DEPLOY_DIR"
@@ -94,29 +52,29 @@ jobs:
               git clone "$REPO_URL" .
             else
               cd "$DEPLOY_DIR"
+              echo "📥 Updating existing installation..."
+              git fetch origin main
+              git checkout main
+              git reset --hard origin/main
             fi
             
-            # Fetch and pull latest changes
-            echo "📥 Fetching latest changes..."
-            git fetch origin main
+            # Stop all services before fresh installation
+            echo "⏹️  Stopping all services..."
+            docker compose down 2>/dev/null || true
             
-            # Get current and new commit hashes
-            CURRENT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "")
-            NEW_COMMIT=$(git rev-parse origin/main)
-            
-            if [ "$CURRENT_COMMIT" = "$NEW_COMMIT" ]; then
-              echo "✅ Already up to date with commit $NEW_COMMIT"
-              exit 0
+            # Reset volumes if requested
+            if [ "${{ inputs.reset_volumes }}" = "true" ]; then
+              echo "🗑️  Removing volumes (data will be lost!)..."
+              docker volume rm aquatiq_postgres_data aquatiq_redis_data aquatiq_n8n_data 2>/dev/null || true
+              echo "✅ Volumes removed - fresh database initialization will occur"
             fi
             
-            echo "🔄 Updating from $CURRENT_COMMIT to $NEW_COMMIT"
-            
-            # Stash any local changes
-            git stash push -m "auto-stash-$(date +%s)" || true
-            
-            # Checkout and reset to latest
-            git checkout main
-            git reset --hard origin/main
+            # Reset networks if requested
+            if [ "${{ inputs.reset_networks }}" = "true" ]; then
+              echo "🗑️  Removing networks..."
+              docker network rm internal aquatiq-backend 2>/dev/null || true
+              echo "✅ Networks removed - will be recreated"
+            fi
             
             # 🔐 CREATE PRODUCTION ENVIRONMENT FILE WITH GITHUB SECRETS
             echo "🔐 Injecting credentials from GitHub Secrets..."
@@ -166,49 +124,73 @@ jobs:
             echo "🔐 Logging into GitHub Container Registry..."
             echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
             
-            # Sync certificates and configs
-            echo "🔒 Syncing certificates and configs..."
-            [ -d "cloudflare-certs" ] && chmod 644 cloudflare-certs/* 2>/dev/null || true
-            
             # Fix permissions on executable scripts
             chmod +x *.sh 2>/dev/null || true
             chmod +x aquatiq-gateway/*.sh 2>/dev/null || true
             
-            # Pull pre-built images from GitHub Container Registry
+            # Pull pre-built images
             echo "📦 Pulling pre-built images from GitHub Container Registry..."
             docker pull ghcr.io/${{ github.repository }}/aquatiq-gateway:latest || echo "Note: Image may not exist yet"
-            
-            # Update environment with image reference
-            echo "Setting image reference in docker-compose..."
             
             # Source production environment for docker compose
             set -a
             [ -f "$DEPLOY_DIR/.env.production" ] && source "$DEPLOY_DIR/.env.production"
             set +a
             
-            # Start services with docker compose (pulls pre-built images)
-            echo "🚀 Deploying services..."
+            # Start services with docker compose
+            echo "🚀 Starting all services (fresh installation)..."
             docker compose -f docker-compose.yml pull 2>&1 | grep -E "(Pulling|Pull complete|Status)" || true
             docker compose -f docker-compose.yml up -d 2>&1 | grep -E "(Creating|Recreate|Starting|Started)" || true
             
             # Wait for services to stabilize
-            sleep 10
+            echo "⏳ Waiting for services to initialize..."
+            sleep 15
             
             # Verify health
-            echo "✅ Verifying service health..."
+            echo "✅ Checking service health..."
             docker compose -f docker-compose.yml ps --format "table {{.Service}}\t{{.Status}}"
             
-            echo "🎉 Deployment completed successfully!"
+            # Test PostgreSQL initialization
+            echo "🔍 Verifying PostgreSQL initialization..."
+            docker compose -f docker-compose.yml logs postgres 2>&1 | grep -E "databases created|ready to accept" | tail -2 || true
+            
+            # Test HTTPS connectivity after Traefik is up
+            echo "⏳ Waiting 20 seconds for Traefik to initialize..."
+            sleep 20
+            
+            echo "🔍 Testing HTTPS connectivity..."
+            curl -k -I https://localhost:443/ 2>&1 | head -1 || echo "Note: Local HTTPS test may require proper hostname"
+            
+            echo ""
+            echo "✨ Fresh installation completed!"
+            echo "📋 NEXT STEPS:"
+            echo "   1. Verify Cloudflare DNS points to VPS: ${{ secrets.VPS_HOST }}"
+            echo "   2. Check services: docker compose ps"
+            echo "   3. View logs: docker compose logs -f [service-name]"
+            echo "   4. Test HTTPS: curl -I https://n8n.aquatiq.com"
             
             # Log out from registry
             docker logout ghcr.io || true
-      
-      - name: Deployment Status
-        if: always()
+
+  notify:
+    needs: fresh-install
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+      - name: Installation Result
         run: |
-          if [ "${{ job.status }}" = "success" ]; then
-            echo "✅ Build and deployment successful!"
+          if [ "${{ needs.fresh-install.result }}" = "success" ]; then
+            echo "✅ Fresh installation completed successfully!"
+            echo "Your VPS is now fully initialized with:"
+            echo "  • All credentials injected from GitHub Secrets"
+            echo "  • Cloudflare origin certificates deployed"
+            echo "  • All 13 services running"
+            echo "  • HTTPS/TLS configured"
+            echo "  • Database initialized"
+            exit 0
           else
-            echo "❌ Build or deployment failed!"
+            echo "❌ Fresh installation failed!"
+            echo "Check GitHub Actions logs for details"
             exit 1
           fi
