@@ -149,12 +149,8 @@ jobs:
             # 🔐 CREATE CLOUDFLARE CERTIFICATES (from GitHub Secrets)
             echo "🔐 Deploying Cloudflare origin certificates..."
             mkdir -p "$DEPLOY_DIR/cloudflare-certs"
-            cat > "$DEPLOY_DIR/cloudflare-certs/origin-cert.pem" << 'CERT_EOF'
-            ${{ secrets.CLOUDFLARE_ORIGIN_CERT }}
-            CERT_EOF
-            cat > "$DEPLOY_DIR/cloudflare-certs/origin-key.pem" << 'KEY_EOF'
-            ${{ secrets.CLOUDFLARE_ORIGIN_KEY }}
-            KEY_EOF
+            printf '%s' "${{ secrets.CLOUDFLARE_ORIGIN_CERT }}" > "$DEPLOY_DIR/cloudflare-certs/origin-cert.pem"
+            printf '%s' "${{ secrets.CLOUDFLARE_ORIGIN_KEY }}" > "$DEPLOY_DIR/cloudflare-certs/origin-key.pem"
             
             # Set secure permissions on certificate and secret files
             chmod 600 "$DEPLOY_DIR/cloudflare-certs"/*.pem
