@@ -124,36 +124,16 @@ jobs:
             # Production Environment - Auto-generated from GitHub Secrets
             # Generated: $(date)
             
-            # Database & Cache
+            DOMAIN=${{ secrets.DOMAIN }}
             POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
             REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
             NATS_AUTH_TOKEN=${{ secrets.NATS_AUTH_TOKEN }}
             N8N_ENCRYPTION_KEY=${{ secrets.N8N_ENCRYPTION_KEY }}
-            
-            # Application Settings
-            DOMAIN=${{ secrets.DOMAIN }}
             INTEGRATION_GATEWAY_API_KEY=${{ secrets.INTEGRATION_GATEWAY_API_KEY }}
-            OAUTH_ENCRYPTION_KEY=${{ secrets.OAUTH_ENCRYPTION_KEY }}
-            SSL_EMAIL=admin@aquatiq.com
-            GENERIC_TIMEZONE=Europe/Oslo
-            
-            # SuperOffice Integration
-            SUPEROFFICE_CLIENT_ID=${{ secrets.SUPEROFFICE_CLIENT_ID }}
-            SUPEROFFICE_CLIENT_SECRET=${{ secrets.SUPEROFFICE_CLIENT_SECRET }}
-            
-            # Visma Integration
-            VISMA_CLIENT_ID=${{ secrets.VISMA_CLIENT_ID }}
-            VISMA_CLIENT_SECRET=${{ secrets.VISMA_CLIENT_SECRET }}
-            
-            # Risk Agent Integration
-            RISK_AGENT_URL=${{ secrets.RISK_AGENT_URL }}
-            RISK_AGENT_API_KEY=${{ secrets.RISK_AGENT_API_KEY }}
-            
-            # Notifications
-            TEAMS_TEAM_ID=${{ secrets.TEAMS_TEAM_ID }}
-            TEAMS_CHANNEL_ID=${{ secrets.TEAMS_CHANNEL_ID }}
-            ALERT_EMAIL_TO=${{ secrets.ALERT_EMAIL_TO }}
-            ALERT_EMAIL_FROM=${{ secrets.ALERT_EMAIL_FROM }}
+            PGADMIN_EMAIL=${{ secrets.PGADMIN_EMAIL }}
+            PGADMIN_PASSWORD=${{ secrets.PGADMIN_PASSWORD }}
+            GRAFANA_PASSWORD=${{ secrets.GRAFANA_PASSWORD }}
+            TRAEFIK_DASHBOARD_AUTH=${{ secrets.TRAEFIK_DASHBOARD_AUTH }}
             EOF
             
             # Create secret files from environment variables
