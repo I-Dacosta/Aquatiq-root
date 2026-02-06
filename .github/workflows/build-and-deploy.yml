@@ -4,10 +4,12 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'docker-compose.yml'
-      - 'aquatiq-gateway/**'
-      - '.github/workflows/build-and-deploy.yml'
+    # Trigger on ANY change to main (including docker-compose, code, config, etc.)
+    # Remove paths filter to build on every push
+    # paths:
+    #   - 'docker-compose.yml'
+    #   - 'aquatiq-gateway/**'
+    #   - '.github/workflows/build-and-deploy.yml'
 
 permissions:
   contents: read
@@ -113,6 +115,63 @@ jobs:
             git checkout main
             git reset --hard origin/main
             
+            # 🔐 CREATE PRODUCTION ENVIRONMENT FILE WITH GITHUB SECRETS
+            echo "🔐 Injecting credentials from GitHub Secrets..."
+            mkdir -p "$DEPLOY_DIR/secrets"
+            
+            # Export GitHub Secrets to .env.production
+            cat > "$DEPLOY_DIR/.env.production" << 'EOF'
+            # Production Environment - Auto-generated from GitHub Secrets
+            # Generated: $(date)
+            
+            # Database & Cache
+            POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+            REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
+            NATS_AUTH_TOKEN=${{ secrets.NATS_AUTH_TOKEN }}
+            N8N_ENCRYPTION_KEY=${{ secrets.N8N_ENCRYPTION_KEY }}
+            
+            # Application Settings
+            DOMAIN=${{ secrets.DOMAIN }}
+            INTEGRATION_GATEWAY_API_KEY=${{ secrets.INTEGRATION_GATEWAY_API_KEY }}
+            OAUTH_ENCRYPTION_KEY=${{ secrets.OAUTH_ENCRYPTION_KEY }}
+            SSL_EMAIL=admin@aquatiq.com
+            GENERIC_TIMEZONE=Europe/Oslo
+            
+            # SuperOffice Integration
+            SUPEROFFICE_CLIENT_ID=${{ secrets.SUPEROFFICE_CLIENT_ID }}
+            SUPEROFFICE_CLIENT_SECRET=${{ secrets.SUPEROFFICE_CLIENT_SECRET }}
+            
+            # Visma Integration
+            VISMA_CLIENT_ID=${{ secrets.VISMA_CLIENT_ID }}
+            VISMA_CLIENT_SECRET=${{ secrets.VISMA_CLIENT_SECRET }}
+            
+            # Risk Agent Integration
+            RISK_AGENT_URL=${{ secrets.RISK_AGENT_URL }}
+            RISK_AGENT_API_KEY=${{ secrets.RISK_AGENT_API_KEY }}
+            
+            # Notifications
+            TEAMS_TEAM_ID=${{ secrets.TEAMS_TEAM_ID }}
+            TEAMS_CHANNEL_ID=${{ secrets.TEAMS_CHANNEL_ID }}
+            ALERT_EMAIL_TO=${{ secrets.ALERT_EMAIL_TO }}
+            ALERT_EMAIL_FROM=${{ secrets.ALERT_EMAIL_FROM }}
+            EOF
+            
+            # Create secret files from environment variables
+            echo "${{ secrets.POSTGRES_PASSWORD }}" > "$DEPLOY_DIR/secrets/postgres_password.txt"
+            echo "${{ secrets.REDIS_PASSWORD }}" > "$DEPLOY_DIR/secrets/redis_password.txt"
+            echo "${{ secrets.NATS_AUTH_TOKEN }}" > "$DEPLOY_DIR/secrets/nats_auth_token.txt"
+            echo "${{ secrets.N8N_ENCRYPTION_KEY }}" > "$DEPLOY_DIR/secrets/n8n_encryption_key.txt"
+            echo "${{ secrets.PGADMIN_EMAIL }}" > "$DEPLOY_DIR/secrets/pgadmin_email.txt"
+            echo "${{ secrets.PGADMIN_PASSWORD }}" > "$DEPLOY_DIR/secrets/pgadmin_password.txt"
+            echo "${{ secrets.GRAFANA_PASSWORD }}" > "$DEPLOY_DIR/secrets/grafana_password.txt"
+            echo "${{ secrets.TRAEFIK_DASHBOARD_AUTH }}" > "$DEPLOY_DIR/secrets/traefik_dashboard_auth.txt"
+            
+            # Set secure permissions on secret files
+            chmod 600 "$DEPLOY_DIR/secrets"/*.txt
+            chmod 640 "$DEPLOY_DIR/.env.production"
+            
+            echo "✅ Credentials injected"
+            
             # Log in to GitHub Container Registry
             echo "🔐 Logging into GitHub Container Registry..."
             echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
@@ -131,6 +190,11 @@ jobs:
             
             # Update environment with image reference
             echo "Setting image reference in docker-compose..."
+            
+            # Source production environment for docker compose
+            set -a
+            [ -f "$DEPLOY_DIR/.env.production" ] && source "$DEPLOY_DIR/.env.production"
+            set +a
             
             # Start services with docker compose (pulls pre-built images)
             echo "🚀 Deploying services..."
