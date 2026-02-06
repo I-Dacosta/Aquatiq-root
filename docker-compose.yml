@@ -159,6 +159,8 @@ services:
 
   # Aquatiq Gateway - Go-based Infrastructure Management Layer
   aquatiq-gateway:
+    image: ghcr.io/i-dacosta/aquatiq-root/aquatiq-gateway:latest
+    # Fallback to build locally if image not found in registry
     build: ./aquatiq-gateway
     container_name: aquatiq-gateway
     restart: unless-stopped
