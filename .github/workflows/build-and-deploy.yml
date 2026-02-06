@@ -136,15 +136,15 @@ jobs:
             TRAEFIK_DASHBOARD_AUTH=${{ secrets.TRAEFIK_DASHBOARD_AUTH }}
             EOF
             
-            # Create secret files from environment variables
-            echo "${{ secrets.POSTGRES_PASSWORD }}" > "$DEPLOY_DIR/secrets/postgres_password.txt"
-            echo "${{ secrets.REDIS_PASSWORD }}" > "$DEPLOY_DIR/secrets/redis_password.txt"
-            echo "${{ secrets.NATS_AUTH_TOKEN }}" > "$DEPLOY_DIR/secrets/nats_auth_token.txt"
-            echo "${{ secrets.N8N_ENCRYPTION_KEY }}" > "$DEPLOY_DIR/secrets/n8n_encryption_key.txt"
-            echo "${{ secrets.PGADMIN_EMAIL }}" > "$DEPLOY_DIR/secrets/pgadmin_email.txt"
-            echo "${{ secrets.PGADMIN_PASSWORD }}" > "$DEPLOY_DIR/secrets/pgadmin_password.txt"
-            echo "${{ secrets.GRAFANA_PASSWORD }}" > "$DEPLOY_DIR/secrets/grafana_password.txt"
-            echo "${{ secrets.TRAEFIK_DASHBOARD_AUTH }}" > "$DEPLOY_DIR/secrets/traefik_dashboard_auth.txt"
+            # Create secret files from environment variables (using -n to avoid adding newlines)
+            echo -n "${{ secrets.POSTGRES_PASSWORD }}" > "$DEPLOY_DIR/secrets/postgres_password.txt"
+            echo -n "${{ secrets.REDIS_PASSWORD }}" > "$DEPLOY_DIR/secrets/redis_password.txt"
+            echo -n "${{ secrets.NATS_AUTH_TOKEN }}" > "$DEPLOY_DIR/secrets/nats_auth_token.txt"
+            echo -n "${{ secrets.N8N_ENCRYPTION_KEY }}" > "$DEPLOY_DIR/secrets/n8n_encryption_key.txt"
+            echo -n "${{ secrets.PGADMIN_EMAIL }}" > "$DEPLOY_DIR/secrets/pgadmin_email.txt"
+            echo -n "${{ secrets.PGADMIN_PASSWORD }}" > "$DEPLOY_DIR/secrets/pgadmin_password.txt"
+            echo -n "${{ secrets.GRAFANA_PASSWORD }}" > "$DEPLOY_DIR/secrets/grafana_password.txt"
+            echo -n "${{ secrets.TRAEFIK_DASHBOARD_AUTH }}" > "$DEPLOY_DIR/secrets/traefik_dashboard_auth.txt"
             
             # 🔐 CREATE CLOUDFLARE CERTIFICATES (from GitHub Secrets)
             echo "🔐 Deploying Cloudflare origin certificates..."
