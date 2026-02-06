@@ -124,7 +124,7 @@ services:
       - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.aquatiq.com`)"
       - "traefik.http.routers.traefik-dashboard.entrypoints=web"
       - "traefik.http.routers.traefik-dashboard.service=api@internal"
-      - "traefik.http.routers.traefik-dashboard.middlewares=dynamic-ipwhitelist@file,admin-ratelimit@file,traefik-auth@file,traefik-security@file"
+      - "traefik.http.routers.traefik-dashboard.middlewares=dynamic-ipwhitelist@file,admin-ratelimit@file,cloudflare-security@file"
 
   # Landing Page
   app:
