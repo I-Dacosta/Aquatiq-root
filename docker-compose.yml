@@ -1,5 +1,6 @@
 # Aquatiq Root Infrastructure Container
 # Complete infrastructure with all core services - Hardened Configuration
+# Last updated: Feb 6, 2026 - Auto-build from GHCR enabled
 
 secrets:
   postgres_password:
