@@ -4,14 +4,9 @@ http:
     # CLOUDFLARE SECURITY & HEADERS
     # ============================================================================
     
-    # Trust Cloudflare headers (real IP, etc)
-    cloudflare-headers:
+    # Security headers for HTTPS connections
+    cloudflare-security:
       headers:
-        customRequestHeaders:
-          # Pass through Cloudflare client IP headers
-          X-Forwarded-For: "{{ .Request.Header.Get \"CF-Connecting-IP\" }}"
-          X-Forwarded-Proto: "https"
-          X-Forwarded-Host: "{{ .Request.Header.Get \"Host\" }}"
         customResponseHeaders:
           # Cloudflare Strict Mode Headers
           Strict-Transport-Security: "max-age=31536000; includeSubDomains; preload"
@@ -71,27 +66,6 @@ http:
           - "image/jpeg"
           - "image/webp"
           - "video/*"
-    
-    # ============================================================================
-    # SECURITY HEADERS (for Cloudflare Strict Mode)
-    # ============================================================================
-    
-    security-strict:
-      headers:
-        # HSTS for strict HTTPS enforcement
-        stsSeconds: 31536000
-        stsIncludeSubdomains: true
-        stsPreload: true
-        # Prevent MIME type sniffing
-        contentTypeNosniff: true
-        # Prevent clickjacking
-        customFrameOptionsValue: "SAMEORIGIN"
-        # Enable XSS protection
-        browserXssFilter: true
-        # No referrer policy
-        referrerPolicy: "strict-origin-when-cross-origin"
-        # Allow HTTPS only
-        forceSTSHeader: true
         contentTypeNosniff: true
         browserXssFilter: true
     

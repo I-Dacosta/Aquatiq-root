@@ -33,32 +33,8 @@ tls:
 
 # HTTP Routes Configuration
 http:
-  # Redirect all HTTP to HTTPS (Cloudflare handles HTTPS → Origin)
-  middlewares:
-    # Security Headers for Cloudflare
-    cloudflare-security:
-      headers:
-        # HSTS: Enable strict transport security
-        stsSeconds: 31536000
-        stsIncludeSubdomains: true
-        stsPreload: true
-        # Frame options to prevent clickjacking
-        customFrameOptionsValue: "SAMEORIGIN"
-        # Content Security Policy
-        customRequestHeaders:
-          X-Content-Type-Options: nosniff
-          X-Frame-Options: SAMEORIGIN
-          X-XSS-Protection: "1; mode=block"
-        
-    # Cloudflare real client IP detection
-    cloudflare-ip:
-      headers:
-        customRequestHeaders:
-          # Cloudflare adds these headers - we pass them through
-          X-Forwarded-For: "{{ .Request.RemoteAddr }}"
-  
   routers:
-    # Redirect HTTP to HTTPS
+    # Redirect HTTP to HTTPS (Cloudflare handles HTTPS → Origin)
     http-catchall:
       rule: "PathPrefix(`/`)"
       entryPoints:
