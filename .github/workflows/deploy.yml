@@ -19,8 +19,23 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          script_stop: true
           script: |
-            cd /opt/aquatiq
+            set -e
+            
+            DEPLOY_DIR="/opt/aquatiq"
+            REPO_URL="https://github.com/I-Dacosta/Aquatiq-root.git"
+            
+            # Initialize directory if it doesn't exist
+            if [ ! -d "$DEPLOY_DIR" ]; then
+              echo "📁 Creating deployment directory..."
+              mkdir -p "$DEPLOY_DIR"
+              cd "$DEPLOY_DIR"
+              echo "🔄 Cloning repository..."
+              git clone "$REPO_URL" .
+            else
+              cd "$DEPLOY_DIR"
+            fi
             
             # Fetch and pull latest changes
             echo "📥 Fetching latest changes..."
