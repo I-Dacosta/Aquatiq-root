@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'docker-compose.yml'
+      - '*.sh'
+      - 'secrets/**'
+      - '.github/workflows/deploy.yml'
 
 jobs:
   deploy:
