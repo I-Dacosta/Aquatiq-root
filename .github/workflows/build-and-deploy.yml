@@ -146,7 +146,18 @@ jobs:
             echo "${{ secrets.GRAFANA_PASSWORD }}" > "$DEPLOY_DIR/secrets/grafana_password.txt"
             echo "${{ secrets.TRAEFIK_DASHBOARD_AUTH }}" > "$DEPLOY_DIR/secrets/traefik_dashboard_auth.txt"
             
-            # Set secure permissions on secret files
+            # 🔐 CREATE CLOUDFLARE CERTIFICATES (from GitHub Secrets)
+            echo "🔐 Deploying Cloudflare origin certificates..."
+            mkdir -p "$DEPLOY_DIR/cloudflare-certs"
+            cat > "$DEPLOY_DIR/cloudflare-certs/origin-cert.pem" << 'CERT_EOF'
+            ${{ secrets.CLOUDFLARE_ORIGIN_CERT }}
+            CERT_EOF
+            cat > "$DEPLOY_DIR/cloudflare-certs/origin-key.pem" << 'KEY_EOF'
+            ${{ secrets.CLOUDFLARE_ORIGIN_KEY }}
+            KEY_EOF
+            
+            # Set secure permissions on certificate and secret files
+            chmod 600 "$DEPLOY_DIR/cloudflare-certs"/*.pem
             chmod 600 "$DEPLOY_DIR/secrets"/*.txt
             chmod 640 "$DEPLOY_DIR/.env.production"
             
