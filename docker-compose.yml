@@ -424,7 +424,7 @@ services:
           cpus: '0.25'
           memory: 256M
     healthcheck:
-      test: ["CMD", "sh", "-c", "redis-cli -a $$(cat /run/secrets/redis_password) ping | grep PONG"]
+      test: ["CMD", "redis-cli", "--no-auth-warning", "-h", "127.0.0.1", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
