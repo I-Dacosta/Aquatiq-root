@@ -1,6 +1,5 @@
 # Aquatiq Root Infrastructure Container
 # Complete infrastructure with all core services - Hardened Configuration
-# Last updated: Feb 6, 2026 - Auto-build from GHCR enabled
 
 secrets:
   postgres_password:
@@ -123,8 +122,7 @@ services:
       # Dashboard router with IP whitelist + rate limiting + auth
       # Middlewares are defined in /certs/middlewares.yml (file provider)
       - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.aquatiq.com`)"
-      - "traefik.http.routers.traefik-dashboard.entrypoints=websecure"
-      - "traefik.http.routers.traefik-dashboard.tls=true"
+      - "traefik.http.routers.traefik-dashboard.entrypoints=web"
       - "traefik.http.routers.traefik-dashboard.service=api@internal"
       - "traefik.http.routers.traefik-dashboard.middlewares=dynamic-ipwhitelist@file,admin-ratelimit@file,traefik-auth@file,traefik-security@file"
 
@@ -154,19 +152,17 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.app.rule=Host(`app.aquatiq.com`)"
-      - "traefik.http.routers.app.entrypoints=websecure"
+      - "traefik.http.routers.app.entrypoints=web,websecure"
       - "traefik.http.routers.app.tls=true"
       - "traefik.http.services.app.loadbalancer.server.port=80"
 
   # Aquatiq Gateway - Go-based Infrastructure Management Layer
   aquatiq-gateway:
-    image: ghcr.io/i-dacosta/aquatiq-root/aquatiq-gateway:latest
-    # Fallback to build locally if image not found in registry
     build: ./aquatiq-gateway
     container_name: aquatiq-gateway
     restart: unless-stopped
     ports:
-      - "7500:7500"   # REST API
+      - "5001:5001"   # REST API
       - "50051:50051" # gRPC API (mTLS)
     depends_on:
       postgres:
@@ -241,10 +237,10 @@ services:
       - "traefik.enable=true"
       # REST API endpoint
       - "traefik.http.routers.aquatiq-gateway.rule=Host(`admin.${DOMAIN}`)"
-      - "traefik.http.routers.aquatiq-gateway.entrypoints=websecure"
+      - "traefik.http.routers.aquatiq-gateway.entrypoints=web,websecure"
       - "traefik.http.routers.aquatiq-gateway.tls=true"
       - "traefik.http.services.aquatiq-gateway.loadbalancer.server.port=7500"
-      - "traefik.http.routers.aquatiq-gateway.middlewares=dynamic-ipwhitelist@file,admin-ratelimit@file"
+      - "traefik.http.routers.aquatiq-gateway.middlewares=dynamic-ipwhitelist@file,admin-ratelimit@file,traefik-auth@file"
   
   # pgAdmin - PostgreSQL Management
   pgadmin:
@@ -271,8 +267,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.pgadmin.rule=Host(`pgadmin.${DOMAIN}`)"
-      - "traefik.http.routers.pgadmin.entrypoints=websecure"
-      - "traefik.http.routers.pgadmin.tls=true"
+      - "traefik.http.routers.pgadmin.entrypoints=web,websecure"
       - "traefik.http.services.pgadmin.loadbalancer.server.port=80"
   
   # RedisInsight - Redis Management (ARM64 compatible)
@@ -296,8 +291,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.redis-insight.rule=Host(`redis.${DOMAIN}`)"
-      - "traefik.http.routers.redis-insight.entrypoints=websecure"
-      - "traefik.http.routers.redis-insight.tls=true"
+      - "traefik.http.routers.redis-insight.entrypoints=web,websecure"
       - "traefik.http.services.redis-insight.loadbalancer.server.port=5540"
   
   # Prometheus - Metrics Collection
@@ -326,8 +320,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.prometheus.rule=Host(`prometheus.${DOMAIN}`)"
-      - "traefik.http.routers.prometheus.entrypoints=websecure"
-      - "traefik.http.routers.prometheus.tls=true"
+      - "traefik.http.routers.prometheus.entrypoints=web,websecure"
       - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
   
   # Grafana - Monitoring Dashboards
@@ -358,7 +351,7 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.grafana.rule=Host(`grafana.aquatiq.com`)"
-      - "traefik.http.routers.grafana.entrypoints=websecure"
+      - "traefik.http.routers.grafana.entrypoints=web,websecure"
       - "traefik.http.routers.grafana.tls=true"
       - "traefik.http.services.grafana.loadbalancer.server.port=3000"
 
@@ -542,8 +535,9 @@ services:
           memory: 512M
     labels:
       - "traefik.enable=true"
+      - "traefik.docker.network=internal"
       - "traefik.http.routers.n8n.rule=Host(`n8n.aquatiq.com`)"
-      - "traefik.http.routers.n8n.entrypoints=websecure"
+      - "traefik.http.routers.n8n.entrypoints=web,websecure"
       - "traefik.http.routers.n8n.tls=true"
       - "traefik.http.services.n8n.loadbalancer.server.port=5678"
     healthcheck:
