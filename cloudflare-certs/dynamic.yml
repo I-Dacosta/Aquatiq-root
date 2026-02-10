@@ -3,6 +3,30 @@
 # Certificate: Valid for *.aquatiq.com and aquatiq.com
 # Expiration: November 17, 2040
 
+http:
+  # External service routing for Aquatiq Tools (deployed separately)
+  routers:
+    tools:
+      rule: "Host(`tools.aquatiq.com`)"
+      entryPoints:
+        - websecure
+      service: tools-frontend
+      tls:
+        options: default
+    
+    tools-http:
+      rule: "Host(`tools.aquatiq.com`)"
+      entryPoints:
+        - web
+      middlewares:
+        - redirect-to-https
+  
+  services:
+    tools-frontend:
+      loadBalancer:
+        servers:
+          - url: "http://aquatiq-tools-frontend:3000"
+
 tls:
   # TLS Certificate Configuration
   certificates:
