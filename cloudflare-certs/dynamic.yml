@@ -18,6 +18,7 @@ http:
       rule: "Host(`tools.aquatiq.com`)"
       entryPoints:
         - web
+      service: tools-frontend
       middlewares:
         - redirect-to-https
   
