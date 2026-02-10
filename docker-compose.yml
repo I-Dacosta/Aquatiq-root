@@ -154,12 +154,11 @@ services:
       - "traefik.http.routers.app.rule=Host(`app.aquatiq.com`)"
       - "traefik.http.routers.app.entrypoints=websecure"
       - "traefik.http.routers.app.tls=true"
-      - "traefik.http.routers.app.tls.options=default@file"
       - "traefik.http.services.app.loadbalancer.server.port=80"
       # HTTP to HTTPS redirect
       - "traefik.http.routers.app-http.rule=Host(`app.aquatiq.com`)"
       - "traefik.http.routers.app-http.entrypoints=web"
-      - "traefik.http.routers.app-http.middlewares=redirect-to-https"
+      - "traefik.http.routers.app-http.middlewares=redirect-to-https@file"
 
   # Aquatiq Gateway - Go-based Infrastructure Management Layer
   aquatiq-gateway:
@@ -244,13 +243,12 @@ services:
       - "traefik.http.routers.aquatiq-gateway.rule=Host(`admin.${DOMAIN}`)"
       - "traefik.http.routers.aquatiq-gateway.entrypoints=websecure"
       - "traefik.http.routers.aquatiq-gateway.tls=true"
-      - "traefik.http.routers.aquatiq-gateway.tls.options=default@file"
       - "traefik.http.services.aquatiq-gateway.loadbalancer.server.port=7500"
       - "traefik.http.routers.aquatiq-gateway.middlewares=dynamic-ipwhitelist@file,admin-ratelimit@file,traefik-auth@file"
       # HTTP to HTTPS redirect
       - "traefik.http.routers.aquatiq-gateway-http.rule=Host(`admin.${DOMAIN}`)"
       - "traefik.http.routers.aquatiq-gateway-http.entrypoints=web"
-      - "traefik.http.routers.aquatiq-gateway-http.middlewares=redirect-to-https"
+      - "traefik.http.routers.aquatiq-gateway-http.middlewares=redirect-to-https@file"
   
   # pgAdmin - PostgreSQL Management
   pgadmin:
@@ -279,12 +277,11 @@ services:
       - "traefik.http.routers.pgadmin.rule=Host(`pgadmin.${DOMAIN}`)"
       - "traefik.http.routers.pgadmin.entrypoints=websecure"
       - "traefik.http.routers.pgadmin.tls=true"
-      - "traefik.http.routers.pgadmin.tls.options=default@file"
       - "traefik.http.services.pgadmin.loadbalancer.server.port=80"
       # HTTP to HTTPS redirect
       - "traefik.http.routers.pgadmin-http.rule=Host(`pgadmin.${DOMAIN}`)"
       - "traefik.http.routers.pgadmin-http.entrypoints=web"
-      - "traefik.http.routers.pgadmin-http.middlewares=redirect-to-https"
+      - "traefik.http.routers.pgadmin-http.middlewares=redirect-to-https@file"
   
   # RedisInsight - Redis Management (ARM64 compatible)
   redis-insight:
@@ -309,12 +306,11 @@ services:
       - "traefik.http.routers.redis-insight.rule=Host(`redis.${DOMAIN}`)"
       - "traefik.http.routers.redis-insight.entrypoints=websecure"
       - "traefik.http.routers.redis-insight.tls=true"
-      - "traefik.http.routers.redis-insight.tls.options=default@file"
       - "traefik.http.services.redis-insight.loadbalancer.server.port=5540"
       # HTTP to HTTPS redirect
       - "traefik.http.routers.redis-insight-http.rule=Host(`redis.${DOMAIN}`)"
       - "traefik.http.routers.redis-insight-http.entrypoints=web"
-      - "traefik.http.routers.redis-insight-http.middlewares=redirect-to-https"
+      - "traefik.http.routers.redis-insight-http.middlewares=redirect-to-https@file"
   
   # Prometheus - Metrics Collection
   prometheus:
@@ -344,12 +340,11 @@ services:
       - "traefik.http.routers.prometheus.rule=Host(`prometheus.${DOMAIN}`)"
       - "traefik.http.routers.prometheus.entrypoints=websecure"
       - "traefik.http.routers.prometheus.tls=true"
-      - "traefik.http.routers.prometheus.tls.options=default@file"
       - "traefik.http.services.prometheus.loadbalancer.server.port=9090"
       # HTTP to HTTPS redirect
       - "traefik.http.routers.prometheus-http.rule=Host(`prometheus.${DOMAIN}`)"
       - "traefik.http.routers.prometheus-http.entrypoints=web"
-      - "traefik.http.routers.prometheus-http.middlewares=redirect-to-https"
+      - "traefik.http.routers.prometheus-http.middlewares=redirect-to-https@file"
   
   # Grafana - Monitoring Dashboards
   grafana:
@@ -381,12 +376,11 @@ services:
       - "traefik.http.routers.grafana.rule=Host(`grafana.aquatiq.com`)"
       - "traefik.http.routers.grafana.entrypoints=websecure"
       - "traefik.http.routers.grafana.tls=true"
-      - "traefik.http.routers.grafana.tls.options=default@file"
       - "traefik.http.services.grafana.loadbalancer.server.port=3000"
       # HTTP to HTTPS redirect
       - "traefik.http.routers.grafana-http.rule=Host(`grafana.aquatiq.com`)"
       - "traefik.http.routers.grafana-http.entrypoints=web"
-      - "traefik.http.routers.grafana-http.middlewares=redirect-to-https"
+      - "traefik.http.routers.grafana-http.middlewares=redirect-to-https@file"
 
   # NTP Time Server (Public)
   ntp-server:
@@ -570,12 +564,11 @@ services:
       - "traefik.http.routers.n8n.rule=Host(`n8n.aquatiq.com`)"
       - "traefik.http.routers.n8n.entrypoints=websecure"
       - "traefik.http.routers.n8n.tls=true"
-      - "traefik.http.routers.n8n.tls.options=default@file"
       - "traefik.http.services.n8n.loadbalancer.server.port=5678"
       # HTTP to HTTPS redirect
       - "traefik.http.routers.n8n-http.rule=Host(`n8n.aquatiq.com`)"
       - "traefik.http.routers.n8n-http.entrypoints=web"
-      - "traefik.http.routers.n8n-http.middlewares=redirect-to-https"
+      - "traefik.http.routers.n8n-http.middlewares=redirect-to-https@file"
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:5678/healthz"]
       interval: 30s
