@@ -10,6 +10,9 @@ Welcome to the Aquatiq Root Container documentation! This system provides a prod
 ### Detailed Guides
 - **[SECURITY.md](SECURITY.md)** - Complete security architecture, best practices, and incident response
 - **[NETWORKING.md](NETWORKING.md)** - Network topology, service discovery, and connection examples
+- **[ADDING_SUBDOMAINS.md](ADDING_SUBDOMAINS.md)** - Guide for adding new subdomains to Traefik
+- **[SUPERSET_SUBDOMAIN_SETUP.md](SUPERSET_SUBDOMAIN_SETUP.md)** - Superset subdomain configuration
+- **[CONTRACT_MANAGER_SUBDOMAIN_SETUP.md](CONTRACT_MANAGER_SUBDOMAIN_SETUP.md)** - Contract Manager subdomain configuration
 
 ### Configuration Files
 - **[.env.example](../.env.example)** - Template for production environment variables
@@ -47,6 +50,9 @@ Welcome to the Aquatiq Root Container documentation! This system provides a prod
 - [Secrets Management](SECURITY.md#secrets-management)
 - [SSL/TLS Configuration](SECURITY.md#ssltls-configuration)
 - [Incident Response](SECURITY.md#incident-response)
+- [Adding Subdomains](ADDING_SUBDOMAINS.md)
+- [Superset Setup](SUPERSET_SUBDOMAIN_SETUP.md)
+- [Contract Manager Setup](CONTRACT_MANAGER_SUBDOMAIN_SETUP.md)
 
 ### For Security Team
 
@@ -84,6 +90,8 @@ Welcome to the Aquatiq Root Container documentation! This system provides a prod
 - [Service Discovery](NETWORKING.md#service-discovery)
 - [Multi-Network Design](NETWORKING.md#multi-network-design)
 - [External Access](NETWORKING.md#external-access)
+- [Adding Subdomains](ADDING_SUBDOMAINS.md)
+- [Traefik Configuration](ADDING_SUBDOMAINS.md#label-reference)
 
 ### Operations
 - [Deployment](../README.md#-deployment)
@@ -224,6 +232,9 @@ code example
 - [ ] Disaster Recovery Plan
 
 ### Recent Updates
+- ✅ Subdomain configuration guides (Feb 2026)
+- ✅ Superset integration guide (Feb 2026)
+- ✅ Contract Manager integration guide (Feb 2026)
 - ✅ Complete security documentation (Nov 2025)
 - ✅ Comprehensive networking guide (Nov 2025)
 - ✅ Enhanced README with credentials (Nov 2025)
@@ -237,6 +248,6 @@ Internal Aquatiq infrastructure documentation. All rights reserved.
 
 ---
 
-**Version:** 1.0  
-**Last Updated:** November 25, 2025  
+**Version:** 1.1  
+**Last Updated:** February 12, 2026  
 **Maintained By:** Aquatiq Infrastructure Team
